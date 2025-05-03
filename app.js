@@ -49,9 +49,23 @@ app.get('/api/nsfw-img', async (req, res) => {
     // Eliminar el archivo temporal
     fs.unlinkSync(tempFilePath);
 
-    // Devolver el enlace de la imagen subida
+    // Extraer el ID y nombre del archivo del enlace devuelto por tmpfiles.org
+    const originalUrl = uploadResponse.data.data.url; // Ejemplo: "https://tmpfiles.org/directory/26912606/temp_image.jpg"
+    const fileIdMatch = originalUrl.match(/\/(\d+)\/([^/]+)$/);
+
+    // Validar que el formato sea correcto
+    if (!fileIdMatch) {
+      return res.status(500).json({ error: 'Ocurrió un error al procesar el enlace del archivo.' });
+    }
+
+    const [_, fileId, fileName] = fileIdMatch;
+
+    // Construir el enlace en el formato solicitado
+    const modifiedUrl = `https://tmpfiles.org/dl/${fileId}/${fileName}`;
+
+    // Devolver el enlace modificado
     res.json({
-      img: uploadResponse.data.data.url,
+      img: modifiedUrl,
     });
   } catch (error) {
     console.error('Error:', error.message);
