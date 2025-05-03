@@ -1,0 +1,24 @@
+{
+  "name": "nsfw-image-api",
+  "version": "1.0.0",
+  "description": "API para generar imágenes NSFW y subirlas a un servicio de almacenamiento temporal.",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": [
+    "nsfw",
+    "image",
+    "api",
+    "tmpfiles",
+    "nodejs",
+    "express"
+  ],
+  "author": "Kenn",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "*",
+    "express": "*",
+    "form-data": "*"
+  }
+}
