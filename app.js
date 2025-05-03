@@ -1,93 +1,66 @@
 const express = require('express');
 const axios = require('axios');
 const fs = require('fs');
-const path = require('path');
+const FormData = require('form-data');
 
 const app = express();
-const PORT = 3000;
 
-// Ruta de la API GET con una ruta más corta
-app.get('/api/nsfw-gen', async (req, res) => {
+// Endpoint para procesar la solicitud con un prompt dinámico
+app.get('/api/nsfw-img', async (req, res) => {
+  try {
+    // Obtener el prompt desde los parámetros de la consulta
     const { prompt } = req.query;
-    const apiKey = req.headers['x-api-key'] || 'tu-clave-api-aqui'; // Reemplace 'tu-clave-api-aqui' con una clave válida si aplica.
 
+    // Validar que se haya enviado el prompt
     if (!prompt) {
-        return res.status(400).json({
-            status: 400,
-            content: "Bad Request",
-            error: "Invalid Request",
-            details: "El parámetro 'prompt' es obligatorio para generar una imagen.",
-        });
+      return res.status(400).json({ error: 'Debes proporcionar un parámetro de consulta llamado "prompt".' });
     }
 
-    try {
-        // Paso 1: Obtener la imagen de la API NSFW
-        const nsfwResponse = await axios.get('https://fastrestapis.fasturl.cloud/aiimage/nsfw', {
-            params: { prompt },
-            headers: {
-                accept: 'image/png',
-                'x-api-key': apiKey,
-            },
-            responseType: 'arraybuffer', // Importante para manejar imágenes binarias
-        });
+    // URL de la API que devuelve la imagen, incluyendo el prompt
+    const imageApiUrl = `https://fastrestapis.fasturl.cloud/aiimage/nsfw?prompt=${encodeURIComponent(prompt)}`;
 
-        // Guardar la imagen temporalmente en el sistema de archivos
-        const tempFilePath = path.join(__dirname, 'temp_image.png');
-        fs.writeFileSync(tempFilePath, nsfwResponse.data);
+    // Descargar la imagen
+    const response = await axios({
+      url: imageApiUrl,
+      method: 'GET',
+      responseType: 'stream',
+    });
 
-        // Paso 2: Subir la imagen a la API de tmpfiles.org
-        const formData = new FormData();
-        formData.append('file', fs.createReadStream(tempFilePath));
+    // Guardar la imagen temporalmente
+    const tempFilePath = './temp_image.jpg';
+    const writer = fs.createWriteStream(tempFilePath);
+    response.data.pipe(writer);
 
-        const uploadResponse = await axios.post('https://tmpfiles.org/api/v1/upload', formData, {
-            headers: {
-                ...formData.getHeaders(),
-            },
-        });
+    // Esperar hasta que se termine de escribir la imagen
+    await new Promise((resolve, reject) => {
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
 
-        // Eliminar la imagen temporal del sistema de archivos
-        fs.unlinkSync(tempFilePath);
+    // Crear el formulario para subir el archivo
+    const formData = new FormData();
+    formData.append('file', fs.createReadStream(tempFilePath));
 
-        // Paso 3: Devolver el enlace de la imagen subida junto con el creador
-        const { data } = uploadResponse;
-        if (data && data.data && data.data.url) {
-            return res.json({
-                status: 'success',
-                img: data.data.url, // Cambiado de image_url a img
-                creador: 'kenn',
-            });
-        } else {
-            return res.status(500).json({
-                status: 'error',
-                message: 'Error al subir la imagen a tmpfiles.org',
-                creador: 'kenn',
-            });
-        }
-    } catch (error) {
-        console.error(error);
+    // Subir el archivo a tmpfiles.org
+    const uploadResponse = await axios.post('https://tmpfiles.org/api/v1/upload', formData, {
+      headers: formData.getHeaders(),
+    });
 
-        // Manejo de errores específicos
-        if (error.response) {
-            const { status, data } = error.response;
+    // Eliminar el archivo temporal
+    fs.unlinkSync(tempFilePath);
 
-            // Responder con el error de la API remota
-            return res.status(status).json({
-                ...data,
-                creador: 'kenn',
-            });
-        }
-
-        // Manejo de otros errores no relacionados con la API remota
-        res.status(500).json({
-            status: 500,
-            content: "Internal Server Error",
-            error: "Ocurrió un error inesperado.",
-            creador: 'kenn',
-        });
-    }
+    // Devolver el enlace de la imagen subida
+    res.json({
+      img: uploadResponse.data.data.url,
+    });
+  } catch (error) {
+    console.error('Error:', error.message);
+    res.status(500).json({ error: 'Ocurrió un error al procesar la solicitud.' });
+  }
 });
 
-// Iniciar servidor
+// Iniciar el servidor
+const PORT = 3000;
 app.listen(PORT, () => {
-    console.log(`Servidor corriendo en http://localhost:${PORT}`);
+  console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
